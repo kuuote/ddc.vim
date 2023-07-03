@@ -43,7 +43,7 @@ export type Context = {
 
 export type UserSource = SourceName | {
   name: SourceName;
-  options?: SourceOptions;
+  options?: Partial<SourceOptions>;
   params?: BaseSourceParams;
 };
 
