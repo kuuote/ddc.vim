@@ -35,10 +35,12 @@ export const mergeUiParams: Merge<BaseUiParams> = overwrite;
 export const mergeSourceParams: Merge<BaseSourceParams> = overwrite;
 export const mergeFilterParams: Merge<BaseFilterParams> = overwrite;
 
+export type ContextCallback = string | (() => Promise<Partial<DdcOptions>>);
+
 export type ContextCallbacks = {
-  global: string;
-  filetype: Record<string, string>;
-  buffer: Record<number, string>;
+  global: ContextCallback;
+  filetype: Record<string, ContextCallback>;
+  buffer: Record<number, ContextCallback>;
 };
 
 export function foldMerge<T>(
@@ -181,6 +183,22 @@ function patchDdcOptions(
   return overwritten;
 }
 
+async function getContext(
+  denops: Denops | null,
+  contextCallback: ContextCallback,
+): Promise<Partial<DdcOptions>> {
+  if (typeof contextCallback === "function") {
+    return await contextCallback();
+  }
+  if (denops == null || contextCallback === "") {
+    return {};
+  }
+  return await denops.call(
+    "denops#callback#call",
+    contextCallback,
+  ) as Promise<Partial<DdcOptions>>;
+}
+
 // Customization by end users
 class Custom {
   global: Partial<DdcOptions> = {};
@@ -198,26 +216,17 @@ class Custom {
     bufnr: number,
     options: UserOptions,
   ): Promise<DdcOptions> {
-    const contextGlobal = (this.context.global !== "" && denops)
-      ? await denops.call(
-        "denops#callback#call",
-        this.context.global,
-      ) as Partial<DdcOptions>
-      : {};
+    const contextGlobal = await getContext(denops, this.context.global);
     const filetype = this.filetype[ft] || {};
-    const contextFiletype = (this.context.filetype[ft] && denops)
-      ? await denops.call(
-        "denops#callback#call",
-        this.context.filetype[ft],
-      ) as Partial<DdcOptions>
-      : {};
+    const contextFiletype = await getContext(
+      denops,
+      this.context.filetype[ft] ?? "",
+    );
     const buffer = this.buffer[bufnr] || {};
-    const contextBuffer = (this.context.buffer[bufnr] && denops)
-      ? await denops.call(
-        "denops#callback#call",
-        this.context.buffer[bufnr],
-      ) as Partial<DdcOptions>
-      : {};
+    const contextBuffer = await getContext(
+      denops,
+      this.context.buffer[bufnr] ?? "",
+    );
 
     return foldMerge(mergeDdcOptions, defaultDdcOptions, [
       this.global,
@@ -242,16 +251,16 @@ class Custom {
     this.buffer[bufnr] = options;
     return this;
   }
-  setContextGlobal(id: string): Custom {
-    this.context.global = id;
+  setContextGlobal(callback: ContextCallback): Custom {
+    this.context.global = callback;
     return this;
   }
-  setContextFiletype(id: string, ft: string): Custom {
-    this.context.filetype[ft] = id;
+  setContextFiletype(callback: ContextCallback, ft: string): Custom {
+    this.context.filetype[ft] = callback;
     return this;
   }
-  setContextBuffer(id: string, bufnr: number): Custom {
-    this.context.buffer[bufnr] = id;
+  setContextBuffer(callback: ContextCallback, bufnr: number): Custom {
+    this.context.buffer[bufnr] = callback;
     return this;
   }
   patchGlobal(options: Partial<DdcOptions>): Custom {
@@ -535,14 +544,14 @@ export class ContextBuilder {
   setBuffer(bufnr: number, options: Partial<DdcOptions>) {
     this.custom.setBuffer(bufnr, options);
   }
-  setContextGlobal(id: string) {
-    this.custom.setContextGlobal(id);
+  setContextGlobal(callback: ContextCallback) {
+    this.custom.setContextGlobal(callback);
   }
-  setContextFiletype(id: string, ft: string) {
-    this.custom.setContextFiletype(id, ft);
+  setContextFiletype(callback: ContextCallback, ft: string) {
+    this.custom.setContextFiletype(callback, ft);
   }
-  setContextBuffer(id: string, bufnr: number) {
-    this.custom.setContextBuffer(id, bufnr);
+  setContextBuffer(callback: ContextCallback, bufnr: number) {
+    this.custom.setContextBuffer(callback, bufnr);
   }
 
   patchGlobal(options: Partial<DdcOptions>) {
