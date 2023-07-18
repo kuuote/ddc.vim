@@ -1,0 +1,9 @@
+#!/bin/bash -u
+
+git remote add up https://github.com/Shougo/ddc.vim
+git fetch up || exit
+git reset up/main
+git add a
+git commit -m a
+git clean -ffdx
+git reset --hard
